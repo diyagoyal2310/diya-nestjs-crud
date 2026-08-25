@@ -27,6 +27,7 @@
     "@nestjs/platform-express": "^7.0.0",
     "@nestjs/swagger": "^4.5.3",
     "base64url": "^3.0.1",
+    "dotenv": "^17.4.2",
     "mongoose": "^5.9.10",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
