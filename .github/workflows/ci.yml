@@ -32,7 +32,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-              - name: Setup Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Format Check
