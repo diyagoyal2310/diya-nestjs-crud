@@ -12,11 +12,11 @@ describe('Articles Controller', () => {
         {
           provide: ArticlesService,
           useValue: {
-            create: jest.fn(),
-            findAll: jest.fn(),
-            getArticle: jest.fn(),
-            update: jest.fn(),
-            delete: jest.fn(),
+            create: jest.fn().mockResolvedValue(undefined),
+            findAll: jest.fn().mockResolvedValue([]),
+            getArticle: jest.fn().mockResolvedValue({ author: 'test-user' }),
+            update: jest.fn().mockResolvedValue(undefined),
+            delete: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
