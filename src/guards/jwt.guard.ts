@@ -14,6 +14,7 @@ export class JWTGuard implements CanActivate {
             return false;
         }
 
+        
         return verifyJWT(jwtTokenRequest);
     }
 }
