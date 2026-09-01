@@ -9,16 +9,23 @@ on:
     branches:
       - new-setup
 
+# Required for GitHub OIDC
 permissions:
   contents: read
   id-token: write
 
 jobs:
 
+  # =====================================================
+  # BUILD AND TEST
+  # =====================================================
+
   build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -38,39 +45,68 @@ jobs:
         run: npm run test
 
 
+  # =====================================================
+  # APPLICATION DEPLOYMENT
+  # =====================================================
+
   deploy:
+    name: Deploy Application
     needs: build-and-test
+
+    # Deploy only after a push to new-setup.
+    # Pull requests will NOT deploy.
     if: github.event_name == 'push'
 
     runs-on: ubuntu-latest
 
     steps:
+
+      # -------------------------------------------------
+      # Authenticate GitHub Actions with AWS using OIDC
+      # -------------------------------------------------
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::023133287482:role/github-actions-nestjs-deploy-role
           aws-region: ap-south-1
 
+      # -------------------------------------------------
+      # Check AWS authentication
+      # -------------------------------------------------
+
+      - name: Check AWS identity
+        run: aws sts get-caller-identity
+
+      # -------------------------------------------------
+      # Deploy application to EC2 using SSM
+      # -------------------------------------------------
+
       - name: Deploy to EC2
         run: |
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "i-0bcc63672446eebb8" \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "cd /home/ubuntu/diya-nestjs-crud",
               "git config --global --add safe.directory /home/ubuntu/diya-nestjs-crud",
-              "git fetch origin",
+              "git fetch origin new-setup",
               "git reset --hard origin/new-setup",
               "npm ci",
-              "npm run build"
+              "npm run build",
+              "pkill -f \"node dist/main\" || true",
+              "nohup npm run start:prod > /home/ubuntu/nestjs.log 2>&1 &"
             ]' \
             --query "Command.CommandId" \
             --output text)
 
           echo "SSM Command ID: $COMMAND_ID"
 
+          echo "Waiting for deployment to complete..."
+
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id "i-0bcc63672446eebb8"
 
-          echo "Deployment completed successfully."
+          echo "Application deployment completed successfully."
