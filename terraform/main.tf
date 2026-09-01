@@ -143,10 +143,20 @@ resource "aws_iam_role" "nestjs_ec2_ssm_role" {
         Effect = "Allow"
 
         Principal = {
-          Service = "ec2.amazonaws.com"
+          Federated = aws_iam_openid_connect_provider.github.arn
         }
 
-        Action = "sts:AssumeRole"
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:diyagoyal2310/diya-nestjs-crud:ref:refs/heads/new-setup"
+          }
+        }
       }
     ]
   })
