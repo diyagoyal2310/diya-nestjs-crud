@@ -9,15 +9,10 @@ on:
     branches:
       - new-setup
 
-# Required for GitHub OIDC
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
 
   # =====================================================
-  # BUILD AND TEST
+  # CI - BUILD AND TEST
   # =====================================================
 
   build-and-test:
@@ -46,14 +41,14 @@ jobs:
 
 
   # =====================================================
-  # APPLICATION DEPLOYMENT
+  # CD - DEPLOY APPLICATION
   # =====================================================
 
   deploy:
     name: Deploy Application
     needs: build-and-test
 
-    # Deploy only after a push to new-setup.
+    # Deploy only after push to new-setup.
     # Pull requests will NOT deploy.
     if: github.event_name == 'push'
 
@@ -62,21 +57,24 @@ jobs:
     steps:
 
       # -------------------------------------------------
-      # Authenticate GitHub Actions with AWS using OIDC
+      # Checkout code
+      # -------------------------------------------------
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+
+      # -------------------------------------------------
+      # Configure AWS credentials
       # -------------------------------------------------
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::023133287482:role/github-actions-nestjs-deploy-role
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      # -------------------------------------------------
-      # Check AWS authentication
-      # -------------------------------------------------
-
-      - name: Check AWS identity
-        run: aws sts get-caller-identity
 
       # -------------------------------------------------
       # Deploy application to EC2 using SSM
@@ -102,8 +100,6 @@ jobs:
             --output text)
 
           echo "SSM Command ID: $COMMAND_ID"
-
-          echo "Waiting for deployment to complete..."
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
