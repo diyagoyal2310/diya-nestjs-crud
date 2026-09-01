@@ -121,9 +121,128 @@ resource "aws_instance" "nestjs_ec2" {
   vpc_security_group_ids      = [aws_security_group.nestjs_ec2_security_group.id]
   associate_public_ip_address = true
 
-  key_name = var.existing_ssh_key_pair_name
+  key_name             = var.existing_ssh_key_pair_name
+  iam_instance_profile = aws_iam_instance_profile.nestjs_ec2_ssm_profile.name
 
   tags = {
     Name = "nestjs-ec2"
   }
+}
+# =========================================================
+# IAM ROLE FOR AWS SYSTEMS MANAGER
+# =========================================================
+
+resource "aws_iam_role" "nestjs_ec2_ssm_role" {
+  name = "nestjs-ec2-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "nestjs-ec2-ssm-role"
+  }
+}
+
+# Allow EC2 to communicate with AWS Systems Manager
+resource "aws_iam_role_policy_attachment" "nestjs_ec2_ssm_policy" {
+  role       = aws_iam_role.nestjs_ec2_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# IAM instance profile for EC2
+resource "aws_iam_instance_profile" "nestjs_ec2_ssm_profile" {
+  name = "nestjs-ec2-ssm-profile"
+  role = aws_iam_role.nestjs_ec2_ssm_role.name
+}
+# =========================================================
+# GITHUB ACTIONS OIDC
+# =========================================================
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
+  ]
+}
+
+# =========================================================
+# IAM ROLE FOR GITHUB ACTIONS
+# =========================================================
+
+resource "aws_iam_role" "github_actions_deploy_role" {
+  name = "github-actions-nestjs-deploy-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:diyagoyal2310/diya-nestjs-crud:ref:refs/heads/new-setup"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "github-actions-nestjs-deploy-role"
+  }
+}
+
+# =========================================================
+# PERMISSIONS FOR GITHUB ACTIONS DEPLOYMENT
+# =========================================================
+
+resource "aws_iam_role_policy" "github_actions_deploy_policy" {
+  name = "github-actions-nestjs-deploy-policy"
+  role = aws_iam_role.github_actions_deploy_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation"
+        ]
+
+        Resource = "*"
+      }
+    ]
+  })
 }
