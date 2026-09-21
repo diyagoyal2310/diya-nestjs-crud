@@ -41,11 +41,26 @@ data "aws_subnet" "existing_subnet" {
 }
 
 # =========================================================
-# UBUNTU 24.04 AMI
+# EXISTING UBUNTU AMI
+# =========================================================
+#
+# We are using the AMI already running on the existing
+# NestJS EC2 instance.
+#
+# Current EC2:
+# i-0bcc63672446eebb8
+#
+# Current AMI:
+# ami-050c78efa486a0196
+#
+# We pin the AMI so Terraform does not replace the
+# existing EC2 when Ubuntu publishes a newer AMI.
 # =========================================================
 
-data "aws_ssm_parameter" "ubuntu_ami" {
-  name = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
+variable "nestjs_ami_id" {
+  description = "AMI ID currently used by the existing NestJS EC2 instance"
+  type        = string
+  default     = "ami-050c78efa486a0196"
 }
 
 # =========================================================
@@ -74,7 +89,10 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
   description = "Security group for NestJS EC2 instance"
   vpc_id      = data.aws_vpc.existing_vpc.id
 
+  # =======================================================
   # SSH
+  # =======================================================
+
   ingress {
     description = "SSH from authorized IP"
     from_port   = 22
@@ -83,7 +101,10 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
     cidr_blocks = [var.ssh_allowed_cidr]
   }
 
-  # NestJS application
+  # =======================================================
+  # NESTJS APPLICATION
+  # =======================================================
+
   ingress {
     description = "NestJS application"
     from_port   = 3000
@@ -92,7 +113,10 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Outbound
+  # =======================================================
+  # OUTBOUND
+  # =======================================================
+
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -111,7 +135,7 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
 # =========================================================
 
 resource "aws_instance" "nestjs_ec2" {
-  ami                         = data.aws_ssm_parameter.ubuntu_ami.value
+  ami                         = var.nestjs_ami_id
   instance_type               = "t3.micro"
   subnet_id                   = data.aws_subnet.existing_subnet.id
   vpc_security_group_ids      = [aws_security_group.nestjs_ec2_security_group.id]
@@ -128,10 +152,14 @@ resource "aws_instance" "nestjs_ec2" {
 # =========================================================
 # IAM ROLE FOR EC2 + SSM
 # =========================================================
-# IMPORTANT:
+#
 # This role belongs to EC2.
-# EC2 must trust "ec2.amazonaws.com".
+#
+# EC2 trusts:
+# ec2.amazonaws.com
+#
 # DO NOT put GitHub OIDC here.
+# =========================================================
 
 resource "aws_iam_role" "nestjs_ec2_ssm_role" {
   name = "nestjs-ec2-ssm-role"
@@ -178,8 +206,10 @@ resource "aws_iam_instance_profile" "nestjs_ec2_ssm_profile" {
 # =========================================================
 # GITHUB ACTIONS OIDC PROVIDER
 # =========================================================
+#
 # This allows GitHub Actions to authenticate to AWS
 # without storing AWS access keys in GitHub.
+# =========================================================
 
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
@@ -196,12 +226,13 @@ resource "aws_iam_openid_connect_provider" "github" {
 # =========================================================
 # IAM ROLE FOR GITHUB ACTIONS
 # =========================================================
-# THIS role is for GitHub Actions.
 #
 # Only the new-setup branch of:
+#
 # diyagoyal2310/diya-nestjs-crud
 #
 # can assume this role.
+# =========================================================
 
 resource "aws_iam_role" "github_actions_deploy_role" {
   name = "github-actions-nestjs-deploy-role"
@@ -240,8 +271,10 @@ resource "aws_iam_role" "github_actions_deploy_role" {
 # =========================================================
 # GITHUB ACTIONS DEPLOYMENT PERMISSIONS
 # =========================================================
+#
 # These permissions allow GitHub Actions to use SSM
 # to deploy the application on EC2.
+# =========================================================
 
 resource "aws_iam_role_policy" "github_actions_deploy_policy" {
   name = "github-actions-nestjs-deploy-policy"
