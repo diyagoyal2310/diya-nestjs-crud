@@ -36,4 +36,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/ec2_key \
             "$EC2_USER@$EC2_HOST" \
-            'sudo bash /home/ubuntu/diya-nestjs-crud/scripts/deploy-on-ec2.sh'
+            'cd /home/ubuntu/diya-nestjs-crud && git fetch origin && git checkout new-setup && git pull --ff-only origin new-setup && sudo bash scripts/deploy-on-ec2.sh'
