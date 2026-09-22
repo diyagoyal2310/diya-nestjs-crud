@@ -11,7 +11,13 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  login(@Body() loginDto: LoginDto): { accessToken: string } {
+  async login(@Body() loginDto: LoginDto): Promise<{ accessToken: string }> {
     return this.authService.login(loginDto.username, loginDto.password);
+  }
+
+  @Public()
+  @Post('register')
+  async register(@Body() loginDto: LoginDto): Promise<{ accessToken: string }> {
+    return this.authService.register(loginDto.username, loginDto.password);
   }
 }
