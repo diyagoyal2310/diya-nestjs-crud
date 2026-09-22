@@ -1,48 +1,44 @@
-const base64 = require('base64url');
+import * as jwt from 'jsonwebtoken';
 
 export const NOT_ALLOWED_USER_MESSAGE= 'Action not allowed for this user';
 export const JWT_HEADER_PARAM= 'x-jwt-assertion';
 
-const base64StringToJson = (encodedInfo) => {
-    try{
-        return JSON.parse(base64.decode(encodedInfo));
-    }catch (e) {
-        return null;
+interface JwtPayloadWithUid extends jwt.JwtPayload {
+    uid: string;
+}
+
+const getJwtSecret = (): string => {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret || secret.length < 32) {
+        throw new Error('JWT_SECRET must be set and contain at least 32 characters');
     }
+
+    return secret;
 };
 
-/*
-    // Example JWT
-    HEADER
-    {
-      "typ": "JWT",
-      "alg": "RS256",
-      "x5t": "NTAxZmMxNDMyZDg3MTU1ZGM0MzEzODJhZWI4NDNlZDU1OGFkNjFiMQ"
-    }
-    PAYLOAD
-    {
-      "uid": "test.test",
-      "roles": []
-    }
-*/
+const getVerifiedJwtPayload = (encodedJWT: string): JwtPayloadWithUid => {
+    const decoded = jwt.decode(encodedJWT, { complete: true });
 
-const getTokenInfo = (encodedJWT) => {
-    try{
-        const splittedUncodedJWT = encodedJWT.split('.');
-
-        return {
-            'header' : base64StringToJson(splittedUncodedJWT[0]),
-            'payload' : base64StringToJson(splittedUncodedJWT[1])
-        }
-    }catch (e) {
-        return null;
+    if (!decoded || decoded.header.typ !== 'JWT' || decoded.header.alg !== 'HS256') {
+        throw new Error('Invalid JWT header');
     }
+
+    const payload = jwt.verify(encodedJWT, getJwtSecret(), {
+        algorithms: ['HS256'],
+    });
+
+    if (typeof payload === 'string' || !payload.uid || typeof payload.uid !== 'string') {
+        throw new Error('JWT uid claim is required');
+    }
+
+    return payload as JwtPayloadWithUid;
 };
 
 export const verifyJWT = (encodedJWT) => {
     try{
-        const jwt = getTokenInfo(encodedJWT);
-        return !!(jwt.header['typ'] === 'JWT' && jwt.payload['uid']);
+        getVerifiedJwtPayload(encodedJWT);
+        return true;
 
     }catch (e) {
         return false;
@@ -51,7 +47,7 @@ export const verifyJWT = (encodedJWT) => {
 
 export const getJWTUser = (encodedJWT) => {
     try{
-        return getTokenInfo(encodedJWT).payload['uid'];
+        return getVerifiedJwtPayload(encodedJWT).uid;
 
     }catch (e) {
         return null;
