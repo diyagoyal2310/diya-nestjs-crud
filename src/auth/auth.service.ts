@@ -1,46 +1,74 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import * as crypto from 'crypto';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class AuthService {
-  constructor() {
-    this.getConfiguration();
-  }
+  constructor(@InjectModel('User') private readonly userModel: Model<any>) {}
 
-  login(username: string, password: string): { accessToken: string } {
-    const { expectedUsername, expectedPassword, jwtSecret } = this.getConfiguration();
+  async login(
+    username: string,
+    password: string,
+  ): Promise<{ accessToken: string }> {
+    const { jwtSecret } = this.getConfiguration();
+    const user = await this.userModel.findOne({ username }).exec();
 
-    if (!this.credentialsMatch(username, expectedUsername) || !this.credentialsMatch(password, expectedPassword)) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     return {
-      accessToken: jwt.sign(
-        { uid: expectedUsername },
-        jwtSecret,
-        { algorithm: 'HS256', expiresIn: '1h', header: { typ: 'JWT', alg: 'HS256' } },
-      ),
+      accessToken: this.createAccessToken(user.username, jwtSecret),
     };
   }
 
-  private credentialsMatch(provided: string, expected: string): boolean {
-    const providedBuffer = Buffer.from(provided || '');
-    const expectedBuffer = Buffer.from(expected);
+  async register(
+    username: string,
+    password: string,
+  ): Promise<{ accessToken: string }> {
+    const { jwtSecret } = this.getConfiguration();
+    const existingUser = await this.userModel.findOne({ username }).exec();
 
-    return providedBuffer.length === expectedBuffer.length
-      && crypto.timingSafeEqual(providedBuffer, expectedBuffer);
-  }
-
-  private getConfiguration(): { expectedUsername: string; expectedPassword: string; jwtSecret: string } {
-    const expectedUsername = process.env.DEV_AUTH_USERNAME;
-    const expectedPassword = process.env.DEV_AUTH_PASSWORD;
-    const jwtSecret = process.env.JWT_SECRET;
-
-    if (!expectedUsername || !expectedPassword || !jwtSecret || jwtSecret.length < 32) {
-      throw new Error('Development authentication environment variables are not configured securely');
+    if (existingUser) {
+      throw new ConflictException('Username already exists');
     }
 
-    return { expectedUsername, expectedPassword, jwtSecret };
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new this.userModel({
+      username,
+      password: hashedPassword,
+    });
+
+    await user.save();
+
+    return {
+      accessToken: this.createAccessToken(user.username, jwtSecret),
+    };
+  }
+
+  private createAccessToken(username: string, jwtSecret: string): string {
+    return jwt.sign({ uid: username }, jwtSecret, {
+      algorithm: 'HS256',
+      expiresIn: '1h',
+      header: { typ: 'JWT', alg: 'HS256' },
+    });
+  }
+
+  private getConfiguration(): {
+    jwtSecret: string;
+  } {
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret || jwtSecret.length < 32) {
+      throw new Error('JWT_SECRET is not configured securely');
+    }
+
+    return { jwtSecret };
   }
 }
