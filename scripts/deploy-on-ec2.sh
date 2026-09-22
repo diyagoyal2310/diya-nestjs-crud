@@ -94,6 +94,7 @@ Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_DIR
 Environment=NODE_ENV=production
+EnvironmentFile=$APP_DIR/.env
 ExecStart=$NODE_BIN $APP_DIR/dist/main.js
 Restart=on-failure
 RestartSec=5
