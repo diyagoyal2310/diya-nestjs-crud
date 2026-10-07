@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - new-setup
+      - feature/automated-ec2-deployment
 
   pull_request:
     branches:
-      - new-setup
+      - feature/automated-ec2-deployment
 
 jobs:
   build-and-test:
