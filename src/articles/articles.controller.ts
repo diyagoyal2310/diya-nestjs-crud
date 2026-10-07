@@ -3,8 +3,11 @@ import { ArticlesService } from './articles.service';
 import { CreateArticleDto, UpdateArticleDto } from './dto/article.dto';
 import { Article } from './interfaces/article.interface';
 import { JWT_HEADER_PARAM, NOT_ALLOWED_USER_MESSAGE, userCanDoAction } from '../shared/utils';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @Controller('articles')
+@ApiTags('articles')
+@ApiSecurity('jwt-assertion')
 export class ArticlesController {
 
   constructor(private readonly articlesService: ArticlesService) {}
