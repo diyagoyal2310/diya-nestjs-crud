@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - new-setup
+      - feature/automated-ec2-deployment
 
 permissions:
   contents: read
