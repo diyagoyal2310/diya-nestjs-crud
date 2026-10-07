@@ -43,19 +43,6 @@ data "aws_subnet" "existing_subnet" {
 # =========================================================
 # EXISTING UBUNTU AMI
 # =========================================================
-#
-# We are using the AMI already running on the existing
-# NestJS EC2 instance.
-#
-# Current EC2:
-# i-0bcc63672446eebb8
-#
-# Current AMI:
-# ami-050c78efa486a0196
-#
-# We pin the AMI so Terraform does not replace the
-# existing EC2 when Ubuntu publishes a newer AMI.
-# =========================================================
 
 variable "nestjs_ami_id" {
   description = "AMI ID currently used by the existing NestJS EC2 instance"
@@ -89,10 +76,7 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
   description = "Security group for NestJS EC2 instance"
   vpc_id      = data.aws_vpc.existing_vpc.id
 
-  # =======================================================
   # SSH
-  # =======================================================
-
   ingress {
     description = "SSH from authorized IP"
     from_port   = 22
@@ -101,10 +85,7 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
     cidr_blocks = [var.ssh_allowed_cidr]
   }
 
-  # =======================================================
-  # NESTJS APPLICATION
-  # =======================================================
-
+  # NestJS application
   ingress {
     description = "NestJS application"
     from_port   = 3000
@@ -113,10 +94,7 @@ resource "aws_security_group" "nestjs_ec2_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # =======================================================
-  # OUTBOUND
-  # =======================================================
-
+  # Outbound
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -141,160 +119,9 @@ resource "aws_instance" "nestjs_ec2" {
   vpc_security_group_ids      = [aws_security_group.nestjs_ec2_security_group.id]
   associate_public_ip_address = true
 
-  key_name             = var.existing_ssh_key_pair_name
-  iam_instance_profile = aws_iam_instance_profile.nestjs_ec2_ssm_profile.name
+  key_name = var.existing_ssh_key_pair_name
 
   tags = {
     Name = "nestjs-ec2"
   }
-}
-
-# =========================================================
-# IAM ROLE FOR EC2 + SSM
-# =========================================================
-#
-# This role belongs to EC2.
-#
-# EC2 trusts:
-# ec2.amazonaws.com
-#
-# DO NOT put GitHub OIDC here.
-# =========================================================
-
-resource "aws_iam_role" "nestjs_ec2_ssm_role" {
-  name = "nestjs-ec2-ssm-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [
-      {
-        Effect = "Allow"
-
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = {
-    Name = "nestjs-ec2-ssm-role"
-  }
-}
-
-# =========================================================
-# EC2 SSM PERMISSION
-# =========================================================
-
-resource "aws_iam_role_policy_attachment" "nestjs_ec2_ssm_policy" {
-  role       = aws_iam_role.nestjs_ec2_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-# =========================================================
-# EC2 INSTANCE PROFILE
-# =========================================================
-
-resource "aws_iam_instance_profile" "nestjs_ec2_ssm_profile" {
-  name = "nestjs-ec2-ssm-profile"
-  role = aws_iam_role.nestjs_ec2_ssm_role.name
-}
-
-# =========================================================
-# GITHUB ACTIONS OIDC PROVIDER
-# =========================================================
-#
-# This allows GitHub Actions to authenticate to AWS
-# without storing AWS access keys in GitHub.
-# =========================================================
-
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
-  ]
-}
-
-# =========================================================
-# IAM ROLE FOR GITHUB ACTIONS
-# =========================================================
-#
-# Only the new-setup branch of:
-#
-# diyagoyal2310/diya-nestjs-crud
-#
-# can assume this role.
-# =========================================================
-
-resource "aws_iam_role" "github_actions_deploy_role" {
-  name = "github-actions-nestjs-deploy-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [
-      {
-        Effect = "Allow"
-
-        Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
-        }
-
-        Action = "sts:AssumeRoleWithWebIdentity"
-
-        Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:diyagoyal2310/diya-nestjs-crud:ref:refs/heads/new-setup"
-          }
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "github-actions-nestjs-deploy-role"
-  }
-}
-
-# =========================================================
-# GITHUB ACTIONS DEPLOYMENT PERMISSIONS
-# =========================================================
-#
-# These permissions allow GitHub Actions to use SSM
-# to deploy the application on EC2.
-# =========================================================
-
-resource "aws_iam_role_policy" "github_actions_deploy_policy" {
-  name = "github-actions-nestjs-deploy-policy"
-
-  role = aws_iam_role.github_actions_deploy_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-
-    Statement = [
-      {
-        Effect = "Allow"
-
-        Action = [
-          "ssm:SendCommand",
-          "ssm:GetCommandInvocation"
-        ]
-
-        Resource = "*"
-      }
-    ]
-  })
 }
